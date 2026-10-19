@@ -1,0 +1,21 @@
+{
+  "type": "vless",
+  "tag": "vless-reality-cleanip",
+  "server": "104.17.48.21",
+  "server_port": 443,
+  "uuid": "YOUR_UUID_HERE",
+  "flow": "xtls-rprx-vision",
+  "tls": {
+    "enabled": true,
+    "server_name": "YOUR_SNI_DOMAIN.com",
+    "utls": {
+      "enabled": true,
+      "fingerprint": "chrome"
+    },
+    "reality": {
+      "enabled": true,
+      "public_key": "YOUR_PUBLIC_KEY_HERE",
+      "short_id": "YOUR_SHORT_ID"
+    }
+  }
+}
