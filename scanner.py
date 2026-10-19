@@ -5,7 +5,7 @@ import socket
 import ssl
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Cloudflare Clean IP Prober & Latency Benchmarker")
@@ -30,11 +30,19 @@ def load_candidate_ips(cidr_file, samples_per_subnet):
             "172.64.0.0/13",
             "162.158.0.0/15",
             "198.41.128.0/17",
-            "188.114.96.0/20"
+            "188.114.96.0/20",
+            "162.159.0.0/16"
         ]
-    for block in lines:
+    for item in lines:
+        if "/" not in item:
+            try:
+                ipaddress.ip_address(item)
+                candidates.append(item)
+            except ValueError:
+                continue
+            continue
         try:
-            net = ipaddress.ip_network(block)
+            net = ipaddress.ip_network(item)
             total = net.num_addresses
             count = min(samples_per_subnet, max(1, total - 4))
             chosen = set()
@@ -67,27 +75,37 @@ def main():
     print(f"[*] Probing {len(candidates)} candidate IPs using {args.workers} concurrent workers...")
 
     results = []
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(probe_endpoint, ip, args.port, args.sni, args.timeout) for ip in candidates]
-        for f in futures:
-            ip, rtt, success = f.result()
-            if success:
-                results.append((ip, rtt))
-                print(f"[+] FOUND: {ip:<18} RTT: {rtt:>6.2f} ms")
+    completed = 0
+    total = len(candidates)
+
+    try:
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            future_to_ip = {pool.submit(probe_endpoint, ip, args.port, args.sni, args.timeout): ip for ip in candidates}
+            for future in as_completed(future_to_ip):
+                completed += 1
+                ip, rtt, success = future.result()
+                if success:
+                    results.append((ip, rtt))
+                    print(f"[{completed}/{total}] FOUND: {ip:<18} RTT: {rtt:>6.2f} ms")
+    except KeyboardInterrupt:
+        print("\n[!] Scan interrupted by user. Showing discovered clean IPs so far...")
 
     results.sort(key=lambda x: x[1])
-    print(f"\n[*] Scan Complete. Clean nodes discovered: {len(results)}")
-    print("-" * 42)
-    print(f"{'RANK':<6}{'CLEAN IP':<18}{'LATENCY':<12}")
-    print("-" * 42)
-    for i, (ip, rtt) in enumerate(results[:15], 1):
-        print(f"#{i:<5}{ip:<18}{rtt:>6.2f} ms")
+    print(f"\n[*] Discovered Clean Nodes: {len(results)}")
+    if results:
+        print("-" * 42)
+        print(f"{'RANK':<6}{'CLEAN IP':<18}{'LATENCY':<12}")
+        print("-" * 42)
+        for i, (ip, rtt) in enumerate(results[:20], 1):
+            print(f"#{i:<5}{ip:<18}{rtt:>6.2f} ms")
 
-    if args.output and results:
-        with open(args.output, "w", encoding="utf-8") as f:
-            for ip, rtt in results:
-                f.write(f"{ip}\t{rtt}ms\n")
-        print(f"\n[*] Top clean IPs saved to: {args.output}")
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                for ip, rtt in results:
+                    f.write(f"{ip}\t{rtt}ms\n")
+            print(f"\n[*] Clean IPs exported to: {args.output}")
+    else:
+        print("[!] No responsive nodes found. Try increasing timeout with -t 2.5 or check network connection.")
 
 if __name__ == "__main__":
     main()

@@ -15,12 +15,12 @@ National firewalls and DPI appliances selectively drop packets and throttle stan
 ### Features
 - Multi-threaded concurrent TCP connect & TLS 1.3 socket probing
 - Real-time RTT latency measurement in milliseconds
-- Direct CIDR subnet random sampling
+- Direct CIDR subnet random sampling & single IP support
+- Graceful interrupt handling (`Ctrl+C` preserves discovered nodes)
 - Zero external dependencies (pure Python 3 standard library: `socket`, `ssl`, `concurrent.futures`)
-- Automatic sorting and clean node export
-- Ready-to-use Sing-box and Xray outbound templates
+- Ready-to-use Sing-box and Xray outbound configuration templates
 
-### Subnets Scanned
+### Subnets Included
 - `104.16.0.0/13`
 - `104.24.0.0/14`
 - `172.64.0.0/13`
@@ -31,7 +31,7 @@ National firewalls and DPI appliances selectively drop packets and throttle stan
 
 ### Requirements
 - Python 3.8+
-- No third-party packages required
+- Supported platforms: Linux, macOS, Windows, Android (Termux)
 
 ### Quick Start
 1. Clone the repository:
@@ -47,7 +47,7 @@ python3 scanner.py
 
 3. Custom scan options:
 ```bash
-python3 scanner.py -c cidr_ranges.txt -s 20 -w 48 -t 1.2 -o clean_ips.txt
+python3 scanner.py -c cidr_ranges.txt -s 15 -w 40 -t 1.2 -o clean_ips.txt
 ```
 
 #### Arguments
@@ -59,9 +59,10 @@ python3 scanner.py -c cidr_ranges.txt -s 20 -w 48 -t 1.2 -o clean_ips.txt
 - `--sni`: Target SNI hostname for TLS handshake validation (default: `cloudflare.com`)
 - `--port`: Destination port (default: `443`)
 
-### Client Integration (Sing-box)
-In your Sing-box configuration outbound object, inject the discovered clean IP into `server`, while keeping your camouflage domain in `tls.server_name`:
+### Client Integration
 
+#### Sing-box (`singbox_clean_ip.json`)
+Set `server` to the discovered clean IP while maintaining your target SNI in `tls.server_name`:
 ```json
 {
   "type": "vless",
@@ -80,6 +81,9 @@ In your Sing-box configuration outbound object, inject the discovered clean IP i
 }
 ```
 
+#### Xray / v2rayN / Nekoray (`xray_clean_ip.json`)
+In your outbound settings, put the clean IP in `vnext[0].address` and your camouflage domain in `streamSettings.realitySettings.serverName`.
+
 ---
 
 <a name="persian"></a>
@@ -89,34 +93,34 @@ In your Sing-box configuration outbound object, inject the discovered clean IP i
 سیستم فیلترینگ با اعمال اختلال عمدی و تزریق پکت‌لاس روی رنج‌های Anycast پیش‌فرض کلودفلر، سرعت کانکشن‌های فیلترشکن را به شدت کاهش می‌دهد. این اسکنر سبک و پرسرعت، مستقیماً ساب‌نت‌های رسمی کلودفلر را با ایجاد هندشیک امن TLS 1.3 روی پورت ۴۴۳ بررسی کرده و آی‌پی‌های بدون اختلال (Clean IP) با کمترین تاخیر (پینگ زیر ۲۰ میلی‌ثانیه) را برای همراه اول، ایرانسل و مخابرات شناسایی می‌کند.
 
 ### قابلیت‌ها
-- اسکن چندنخی (Multi-threaded) فوق‌العاده سریع بدون اشغال منابع
+- اسکن چندنخی (Multi-threaded) فوق‌العاده سریع بدون اشغال پردازنده و رم
 - اندازه‌گیری دقیق تاخیر RTT به میلی‌ثانیه بر مبنای برقراری کامل هندشیک TLS 1.3
 - نمونه‌برداری هوشمند از ساب‌نت‌های Anycast بدون نیاز به اسکن دستی هزاران آی‌پی
+- پشتیبانی از توقف با `Ctrl+C` همراه با ذخیره و نمایش نتایج به‌دست‌آمده تا همان لحظه
 - بدون نیاز به نصب هیچ پیش‌نیاز یا کتابخانه اضافی (استفاده از کتابخانه استاندارد پایتون)
-- استخراج و رتبه‌بندی آی‌پی‌ها از کمترین پینگ به بیشترین
-- سازگاری کامل با کلاینت‌های Sing-box، v2rayN، Nekobox و Clash
+- قالب‌های آماده پیکربندی برای Sing-box و Xray / v2rayN
 
 ### نحوه اجرا
-۱. دریافت مخزن:
+۱. کلون کردن مخزن:
 ```bash
 git clone git@github.com:v74all/cloudflare-clean-ip-hunter.git
 cd cloudflare-clean-ip-hunter
 ```
 
-۲. اجرای اسکن:
+۲. اجرای اسکن سریع:
 ```bash
 python3 scanner.py
 ```
 
-۳. اجرای اختصاصی با تنظیم تعداد نخ‌ها و خروجی:
+۳. اجرای اختصاصی با تنظیم تعداد نخ‌ها، زمان تایم‌اوت و فایل خروجی:
 ```bash
 python3 scanner.py -s 15 -w 40 -t 1.2 -o clean_ips.txt
 ```
 
-### نحوه استفاده در کلاینت‌ها
-کافیست در کانفیگ خود (مانند Sing-box یا v2rayN):
-- مقدار `server` یا `Address` را برابر با آی‌پی تمیز کشف‌شده قرار دهید.
-- مقدار `server_name` یا `SNI` را روی دامنه مبدا/استتار خود نگه دارید.
+### نحوه اعمال در نرم‌افزارهای کلاینت
+- **در Sing-box**: مقدار `server` را برابر آی‌پی تمیز و `server_name` را برابر دامنه استتار خود بگذارید (فایل `singbox_clean_ip.json`).
+- **در v2rayN و v2rayNG**: در بخش ویرایش کانفیگ، فیلد `Address` را به آی‌پی تمیز تغییر دهید و فیلد `SNI` را دست‌نخورده نگه دارید.
+- **در Xray / Nekoray**: فایل نمونه `xray_clean_ip.json` را استفاده کنید.
 
 ---
 

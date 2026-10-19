@@ -1,0 +1,35 @@
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "proxy-cleanip",
+      "settings": {
+        "vnext": [
+          {
+            "address": "104.17.48.21",
+            "port": 443,
+            "users": [
+              {
+                "id": "YOUR_UUID_HERE",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "chrome",
+          "serverName": "YOUR_SNI_DOMAIN.com",
+          "publicKey": "YOUR_PUBLIC_KEY_HERE",
+          "shortId": "YOUR_SHORT_ID",
+          "spiderX": ""
+        }
+      }
+    }
+  ]
+}
