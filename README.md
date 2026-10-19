@@ -4,6 +4,10 @@
 
 High-performance, multi-threaded Cloudflare Anycast clean IP scanner and latency benchmarker. Designed to discover unthrottled edge IP addresses with sub-20ms RTT and minimal jitter across censored ISPs.
 
+<p align="center">
+  <img src="docs/screenshots/scanner_run.png" width="920" alt="Cloudflare Clean IP Hunter active scan">
+</p>
+
 ---
 
 <a name="english"></a>
@@ -50,6 +54,10 @@ python3 scanner.py
 python3 scanner.py -c cidr_ranges.txt -s 15 -w 40 -t 1.2 -o clean_ips.txt
 ```
 
+<p align="center">
+  <img src="docs/screenshots/scanner_help.png" width="920" alt="Scanner Options and Flags">
+</p>
+
 #### Arguments
 - `-c, --cidr`: Path to CIDR subnet list (default: `cidr_ranges.txt`)
 - `-s, --samples`: Number of random IP candidates sampled per subnet block (default: `12`)
@@ -63,6 +71,11 @@ python3 scanner.py -c cidr_ranges.txt -s 15 -w 40 -t 1.2 -o clean_ips.txt
 
 #### Sing-box (`singbox_clean_ip.json`)
 Set `server` to the discovered clean IP while maintaining your target SNI in `tls.server_name`:
+
+<p align="center">
+  <img src="docs/screenshots/singbox_integration.png" width="920" alt="Sing-box Outbound Configuration with Clean IP">
+</p>
+
 ```json
 {
   "type": "vless",
