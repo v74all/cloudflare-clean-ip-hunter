@@ -1,146 +1,160 @@
-# Cloudflare Clean IP Hunter
+# cloudflare-clean-ip-hunter
 
-[English](#english) | [فارسی](#persian)
+پیدا کردن آی‌پی‌هایی از کلودفلر که روی اینترنت خودت (همون اپراتوری که باهاش وصل میشی) بهتر جواب میدن، برای کانفیگ‌هایی که پشت کلودفلر هستن.
+English version: [below](#english)
 
-High-performance, multi-threaded Cloudflare Anycast clean IP scanner and latency benchmarker. Designed to discover unthrottled edge IP addresses with sub-20ms RTT and minimal jitter across censored ISPs.
+آموزش ویدیویی (فارسی): کانال یوتیوب [@V7lthronyx](https://www.youtube.com/@V7lthronyx)
 
-<p align="center">
-  <img src="docs/screenshots/scanner_run.png" width="920" alt="Cloudflare Clean IP Hunter active scan">
-</p>
+## آی‌پی تمیز یعنی چی
+
+وقتی کانفیگت پشت کلودفلره (دامنه‌ات با ابر نارنجی، ترنسپورت ws یا xhttp یا grpc یا httpupgrade)، کلاینتت لازم نیست حتماً به همون آی‌پی‌ای وصل بشه که DNS میده. هر آی‌پی از شبکه‌ی کلودفلر سایت تو رو هم سرو می‌کنه، چون همه‌ی سرورهای لبه‌ی کلودفلر همه‌ی دامنه‌هاش رو می‌شناسن (anycast).
+
+اپراتورها بعضی وقت‌ها بعضی از این آی‌پی‌ها یا رنج‌ها رو کند می‌کنن یا می‌بندن. «آی‌پی تمیز» یعنی آی‌پی‌ای که همین الان، روی اینترنت تو، خوب جواب میده. این برای هر اپراتور و هر ساعت فرق داره؛ واسه همین باید خودت از روی شبکه‌ی خودت اسکن کنی.
+
+این ابزار برای کانفیگ REALITY، یا هر کانفیگی که مستقیم به آی‌پی سرور خودت وصل میشه، به درد نمی‌خوره. REALITY مستقیم با سرورت حرف می‌زنه و پشت کلودفلر نمیره؛ اگه لینک REALITY بدی، اسکنر همینو بهت میگه.
+
+## چی کار می‌کنه
+
+برای هر آی‌پی همون کاری رو می‌کنه که کلاینتت می‌کنه:
+
+1. اتصال TCP به پورت ۴۴۳ (یا پورت کانفیگت) و اندازه‌گیری زمانش (پینگ)
+2. دست‌دادن TLS با دامنه‌ی خودت به‌عنوان SNI، با چک کردن گواهی
+3. درخواست `/cdn-cgi/trace` با Host دامنه‌ی خودت. این آدرس رو فقط خود کلودفلر جواب میده و اسم دیتاسنتری که جواب داده (`colo`، مثلاً `FRA` یا `IST`) توشه. پس آی‌پی‌ای که از این مرحله رد بشه واقعاً لبه‌ی کلودفلره و سایت تو رو سرو می‌کنه، نه یه صفحه‌ی مسدودی یا یه سرور دیگه.
+
+آی‌پی‌های سالم چند بار دیگه تست میشن (پیش‌فرض در کل ۴ بار، هر بار با اتصال تازه) و به ترتیب درصد از دست رفتن (loss)، پینگ و نوسان (jitter) مرتب میشن.
+
+- با `--speed` روی بهترین‌ها تست دانلود هم انجام میده.
+- با `--link` لینک کانفیگت رو می‌گیره، دامنه و پورت و TLS رو از خودش برمی‌داره، و همون لینک رو با بهترین آی‌پی‌ها برمی‌گردونه. SNI و Host روی دامنه‌ی خودت می‌مونن تا کانفیگ خراب نشه.
+
+فقط یه فایل پایتون، بدون هیچ کتابخونه‌ی اضافه (پایتون ۳.۸ یا جدیدتر). تست‌شده روی Ubuntu 24.04 (پایتون 3.12)، Debian 12 (پایتون 3.11)، پایتون 3.8 و 3.14. روی ویندوز و Termux هم از همون کتابخونه‌ی استاندارد پایتون استفاده می‌کنه.
+
+## قبل از اسکن: فیلترشکن رو خاموش کن
+
+اسکن باید از روی همون اینترنتی باشه که کانفیگ رو باهاش استفاده می‌کنی (دیتای گوشی، وای‌فای خونه). اگه فیلترشکن یا WARP روشن باشه، داری مسیر سرور فیلترشکن رو تست می‌کنی، نه اپراتور خودت رو. اسکنر از جواب کلودفلر می‌فهمه اتصالت از کدوم کشور دیده میشه؛ اگه ایران نباشه یا WARP روشن باشه بهت هشدار میده.
+
+## دانلود و اجرا
+
+### اندروید (Termux)
+
+Termux رو از F-Droid یا گیت‌هاب خودش نصب کن (نسخه‌ی گوگل‌پلی قدیمیه). بعد:
+
+```bash
+pkg install python
+curl -fsSLO https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest/download/scanner.py
+python scanner.py -d your.domain.com
+```
+
+### ویندوز
+
+پایتون رو از [python.org](https://www.python.org/downloads/) نصب کن (موقع نصب تیک `Add python.exe to PATH` رو بزن). فایل `scanner.py` رو از بخش [Releases](https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest) دانلود کن، توی همون پوشه CMD یا PowerShell باز کن و بزن:
+
+```
+py scanner.py -d your.domain.com
+```
+
+### لینوکس و مک
+
+```bash
+curl -fsSLO https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest/download/scanner.py
+curl -fsSLO https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS       # مک: shasum -a 256 -c SHA256SUMS
+python3 scanner.py -d your.domain.com
+```
+
+## استفاده
+
+```bash
+python3 scanner.py -d your.domain.com                    # ۲۰۰ آی‌پی تصادفی از رنج‌های رسمی کلودفلر
+python3 scanner.py --link 'vless://...'                  # دامنه رو از لینکت برمی‌داره، لینک رو با بهترین آی‌پی‌ها میده
+python3 scanner.py -d your.domain.com --speed            # تست دانلود روی ۵ آی‌پی برتر، هر کدوم ۵ مگابایت
+python3 scanner.py -d your.domain.com -n 500             # آی‌پی بیشتر
+python3 scanner.py -d your.domain.com -r my_ips.txt      # فقط آی‌پی‌ها یا رنج‌های خودت (مثلاً خروجی دفعه‌ی قبل)
+python3 scanner.py -d your.domain.com --no-tls -p 8080   # کانفیگ بدون TLS روی پورت‌های http
+```
+
+- لینک رو توی لینوکس، مک و Termux بین `'` بذار؛ توی CMD ویندوز بین `"`.
+- `your.domain.com` رو با دامنه‌ی کانفیگ خودت عوض کن. اگه ندی، با `speed.cloudflare.com` تست می‌کنه؛ ولی فیلترینگ می‌تونه با هر SNI جور دیگه‌ای رفتار کنه، پس نتیجه‌ی واقعی با دامنه‌ی خودته.
+
+خروجی:
+
+| ستون | معنی |
+|---|---|
+| PING | میانه‌ی زمان اتصال TCP (تقریباً همون پینگ) |
+| JITTER | نوسان پینگ بین تست‌ها |
+| LOSS | درصد درخواست‌هایی که جواب نگرفتن |
+| COLO | کد دیتاسنتر کلودفلر که جواب داده |
+| SPEED | سرعت دانلود (فقط با `--speed`) |
+
+همه‌ی آی‌پی‌های سالم توی `results.csv` ذخیره میشن، و با `--link` لینک‌های آماده توی `links.txt`.
+
+| گزینه | پیش‌فرض | کار |
+|---|---|---|
+| `-d`, `--domain` | `speed.cloudflare.com` | دامنه‌ی کانفیگت (SNI و Host) |
+| `--link` | | لینک vless، trojan یا vmess؛ دامنه، پورت و TLS از خودش خونده میشه |
+| `-p`, `--port` | ۴۴۳ یا پورت لینک | پورت |
+| `--no-tls` | | http ساده (پورت‌های 80، 8080، 8880، 2052، 2082، 2086، 2095) |
+| `-n`, `--count` | 200 | تعداد آی‌پی تصادفی (از هر بلوک ‎/24 حداکثر یکی) |
+| `-r`, `--ranges` | لیست رسمی کلودفلر | فایل رنج‌ها و آی‌پی‌ها (نمونه: `cidr_ranges.txt`) |
+| `--ip` | | فقط این آی‌پی (می‌شه چند بار داد) |
+| `-w`, `--workers` | 32 | چند آی‌پی همزمان |
+| `-t`, `--timeout` | 2.5 | ثانیه برای هر مرحله |
+| `--rounds` | 4 | تعداد تست برای هر آی‌پی سالم |
+| `--top` | 10 | چند تا نشون داده بشه |
+| `--speed` | | تست دانلود |
+| `--speed-top`, `--speed-mb` | 5، 5 | روی چند آی‌پی و هر کدوم چند مگابایت |
+| `--speed-url` | `speed.cloudflare.com/__down` | فایلی که دانلود میشه (اگه این آدرس روی شبکه‌ات بسته‌ست، یه فایل روی دامنه‌ی خودت بده) |
+| `--links` | 3 | با `--link`: چند لینک ساخته بشه |
+| `-o`, `--output` | `results.csv` | فایل CSV (`''` یعنی ذخیره نکن) |
+
+## گذاشتن آی‌پی توی کلاینت
+
+توی v2rayNG، v2rayN، Hiddify یا NekoBox فقط **Address** رو آی‌پی تمیز بذار. **SNI** و **Host** (یا Request host) باید دامنه‌ی خودت بمونن؛ اگه خالی بودن، دامنه‌ات رو توشون بنویس. اگه SNI خالی بمونه، کلاینت آی‌پی رو به‌جای دامنه می‌فرسته و کلودفلر نمی‌دونه سایت کیه.
+
+راه ساده‌تر: لینک‌هایی که `--link` ساخته رو import کن. اون‌ها همین کار رو انجام دادن.
+
+## چیزهایی که باید بدونی
+
+- پینگ به فاصله بستگی داره. کلودفلر توی ایران دیتاسنتر نداره، پس جواب از نزدیک‌ترین دیتاسنتر خارج میاد (ستون COLO) و هیچ ابزاری پینگ رو از اون فاصله کمتر نمی‌کنه. اگه کسی از ایران «پینگ زیر ۲۰ میلی‌ثانیه» نشونت داد، عددش واقعی نیست.
+- آی‌پی‌ای که امروز تمیزه ممکنه فردا کند بشه. هر وقت کند شد دوباره اسکن کن.
+- اثر انگشت TLS پایتون با کلاینتت (مثلاً Xray با `fp=chrome`) یکی نیست. اسکن آی‌پی‌های امیدوارکننده رو پیدا می‌کنه؛ تست آخر، وصل شدن با خود کلاینتته.
+- همه‌ی آی‌پی‌های رنج‌های کلودفلر سایت مشتری‌ها رو سرو نمی‌کنن؛ برای همین بخشی از آی‌پی‌ها همیشه timeout میدن. طبیعیه.
+- اسکن سبکه: برای هر آی‌پی چند درخواست HTTPS معمولی به سرورهای خود کلودفلر. توی حلقه‌ی بی‌نهایت اجراش نکن.
+
+## تست
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+تست‌ها اینترنت لازم ندارن: یه سرور TLS محلی که مثل لبه‌ی کلودفلر جواب میده، کل مسیر اسکن و تست سرعت و ساختن لینک رو تست می‌کنه.
+
+## لایسنس
+
+MIT
 
 ---
 
 <a name="english"></a>
-## English Documentation
+## English
 
-### Overview
-National firewalls and DPI appliances selectively drop packets and throttle standard Cloudflare Anycast IP ranges to cripple proxy connections. By decoupling the physical connection endpoint from the TLS SNI domain header, this scanner probes Cloudflare edge subnets directly on port 443 with TLS 1.3 handshakes to harvest clean, unthrottled nodes.
+Find Cloudflare edge IPs that work well **from your own network**, for proxy configs that sit behind the Cloudflare CDN (ws, xhttp, grpc or httpupgrade, with TLS or on the plain-http ports). Any Cloudflare edge IP serves any proxied hostname (anycast), so the client can connect to whichever edge IP your ISP treats best, while SNI and Host stay your domain. It is useless for REALITY or any config that connects straight to your own server; the scanner says so if you give it a REALITY link.
 
-### Features
-- Multi-threaded concurrent TCP connect & TLS 1.3 socket probing
-- Real-time RTT latency measurement in milliseconds
-- Direct CIDR subnet random sampling & single IP support
-- Graceful interrupt handling (`Ctrl+C` preserves discovered nodes)
-- Zero external dependencies (pure Python 3 standard library: `socket`, `ssl`, `concurrent.futures`)
-- Ready-to-use Sing-box and Xray outbound configuration templates
+**Turn your VPN off before scanning**: the result must describe your ISP's path. The scanner reads the country Cloudflare sees and warns when it isn't Iran or when WARP is on.
 
-### Subnets Included
-- `104.16.0.0/13`
-- `104.24.0.0/14`
-- `172.64.0.0/13`
-- `162.158.0.0/15`
-- `198.41.128.0/17`
-- `188.114.96.0/20`
-- `162.159.0.0/16`
+What it checks on every IP, exactly like a client would: a TCP connect (timed: the ping), a TLS handshake with your domain as SNI and the certificate verified, then `GET /cdn-cgi/trace` with your domain as Host. Only Cloudflare answers that path, and the answer names the datacenter (`colo`). IPs that pass get more rounds on fresh connections and are ranked by loss, ping and jitter. `--speed` adds a download test on the best ones; `--link` takes domain, port and TLS from your `vless://`, `trojan://` or `vmess://` link and prints it back with the best IPs (SNI and Host pinned to your domain).
 
-### Requirements
-- Python 3.8+
-- Supported platforms: Linux, macOS, Windows, Android (Termux)
+One file, Python 3.8+ standard library only. Tested on Ubuntu 24.04 (Python 3.12), Debian 12 (3.11), Python 3.8 and 3.14.
 
-### Quick Start
-1. Clone the repository:
 ```bash
-git clone git@github.com:v74all/cloudflare-clean-ip-hunter.git
-cd cloudflare-clean-ip-hunter
+curl -fsSLO https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest/download/scanner.py
+python3 scanner.py -d your.domain.com
+python3 scanner.py --link 'vless://...' --speed
 ```
 
-2. Run the scanner:
-```bash
-python3 scanner.py
-```
+Windows: install Python from python.org, then `py scanner.py -d your.domain.com`. Android: Termux, `pkg install python`.
 
-3. Custom scan options:
-```bash
-python3 scanner.py -c cidr_ranges.txt -s 15 -w 40 -t 1.2 -o clean_ips.txt
-```
+Notes: ping is bound by distance (there is no Cloudflare datacenter in Iran, so nothing gets you near-zero latency from there); a clean IP today may be slow tomorrow, so scan again; Python's TLS fingerprint differs from your client's, so the final test is connecting with your client; part of Cloudflare's ranges never serve customer sites, so timeouts on a share of the sample are normal. The scan is light (a few ordinary HTTPS requests per IP to Cloudflare's own edge); don't run it in a loop.
 
-<p align="center">
-  <img src="docs/screenshots/scanner_help.png" width="920" alt="Scanner Options and Flags">
-</p>
+Tests (no network needed): `python3 -m unittest discover -s tests`
 
-#### Arguments
-- `-c, --cidr`: Path to CIDR subnet list (default: `cidr_ranges.txt`)
-- `-s, --samples`: Number of random IP candidates sampled per subnet block (default: `12`)
-- `-w, --workers`: Concurrent thread count (default: `32`)
-- `-t, --timeout`: Connection timeout in seconds (default: `1.5`)
-- `-o, --output`: Output file for ranked clean IPs (default: `clean_ips.txt`)
-- `--sni`: Target SNI hostname for TLS handshake validation (default: `cloudflare.com`)
-- `--port`: Destination port (default: `443`)
-
-### Client Integration
-
-#### Sing-box (`singbox_clean_ip.json`)
-Set `server` to the discovered clean IP while maintaining your target SNI in `tls.server_name`:
-
-<p align="center">
-  <img src="docs/screenshots/singbox_integration.png" width="920" alt="Sing-box Outbound Configuration with Clean IP">
-</p>
-
-```json
-{
-  "type": "vless",
-  "tag": "vless-clean-ip",
-  "server": "104.17.48.21",
-  "server_port": 443,
-  "uuid": "YOUR_UUID_HERE",
-  "tls": {
-    "enabled": true,
-    "server_name": "YOUR_SNI_DOMAIN.com",
-    "utls": {
-      "enabled": true,
-      "fingerprint": "chrome"
-    }
-  }
-}
-```
-
-#### Xray / v2rayN / Nekoray (`xray_clean_ip.json`)
-In your outbound settings, put the clean IP in `vnext[0].address` and your camouflage domain in `streamSettings.realitySettings.serverName`.
-
----
-
-<a name="persian"></a>
-## راهنمای فارسی
-
-### معرفی ابزار
-سیستم فیلترینگ با اعمال اختلال عمدی و تزریق پکت‌لاس روی رنج‌های Anycast پیش‌فرض کلودفلر، سرعت کانکشن‌های فیلترشکن را به شدت کاهش می‌دهد. این اسکنر سبک و پرسرعت، مستقیماً ساب‌نت‌های رسمی کلودفلر را با ایجاد هندشیک امن TLS 1.3 روی پورت ۴۴۳ بررسی کرده و آی‌پی‌های بدون اختلال (Clean IP) با کمترین تاخیر (پینگ زیر ۲۰ میلی‌ثانیه) را برای همراه اول، ایرانسل و مخابرات شناسایی می‌کند.
-
-### قابلیت‌ها
-- اسکن چندنخی (Multi-threaded) فوق‌العاده سریع بدون اشغال پردازنده و رم
-- اندازه‌گیری دقیق تاخیر RTT به میلی‌ثانیه بر مبنای برقراری کامل هندشیک TLS 1.3
-- نمونه‌برداری هوشمند از ساب‌نت‌های Anycast بدون نیاز به اسکن دستی هزاران آی‌پی
-- پشتیبانی از توقف با `Ctrl+C` همراه با ذخیره و نمایش نتایج به‌دست‌آمده تا همان لحظه
-- بدون نیاز به نصب هیچ پیش‌نیاز یا کتابخانه اضافی (استفاده از کتابخانه استاندارد پایتون)
-- قالب‌های آماده پیکربندی برای Sing-box و Xray / v2rayN
-
-### نحوه اجرا
-۱. کلون کردن مخزن:
-```bash
-git clone git@github.com:v74all/cloudflare-clean-ip-hunter.git
-cd cloudflare-clean-ip-hunter
-```
-
-۲. اجرای اسکن سریع:
-```bash
-python3 scanner.py
-```
-
-۳. اجرای اختصاصی با تنظیم تعداد نخ‌ها، زمان تایم‌اوت و فایل خروجی:
-```bash
-python3 scanner.py -s 15 -w 40 -t 1.2 -o clean_ips.txt
-```
-
-### نحوه اعمال در نرم‌افزارهای کلاینت
-- **در Sing-box**: مقدار `server` را برابر آی‌پی تمیز و `server_name` را برابر دامنه استتار خود بگذارید (فایل `singbox_clean_ip.json`).
-- **در v2rayN و v2rayNG**: در بخش ویرایش کانفیگ، فیلد `Address` را به آی‌پی تمیز تغییر دهید و فیلد `SNI` را دست‌نخورده نگه دارید.
-- **در Xray / Nekoray**: فایل نمونه `xray_clean_ip.json` را استفاده کنید.
-
----
-
-### کانال‌های ارتباطی
-- **YouTube**: [V7lthronyx](https://youtube.com/@V7lthronyx)
-- **Telegram**: [@V7LTHRONYX](https://t.me/V7LTHRONYX)
-- **GitHub**: [v74all](https://github.com/v74all)
-
-### لایسنس
-MIT License - توسعه داده شده توسط V7lthronyx (Aiden Azad).
+License: MIT

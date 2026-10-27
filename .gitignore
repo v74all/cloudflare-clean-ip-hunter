@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
+results.csv
+links.txt
 clean_ips.txt
 .DS_Store
 *.swp
-
