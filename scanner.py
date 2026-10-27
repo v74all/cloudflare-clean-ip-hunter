@@ -27,7 +27,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # https://www.cloudflare.com/ips-v4 (checked 2026-10-27)
 CF_RANGES = """
@@ -305,10 +305,11 @@ def speed_test(ip, url, nbytes, timeout, insecure, max_seconds=10.0):
 
 # ---------------------------------------------------------------- runner
 
-def run_pool(func, items, workers, label):
-    """func(item) over items with a progress line; Ctrl+C stops early and keeps what finished."""
+def run_pool(func, items, workers, label, quiet=False):
+    """func(item) over items with a progress line (erased at the end, so it leaves no row behind);
+    Ctrl+C stops early and keeps what finished."""
     done, results, lock = [0], [], threading.Lock()
-    tty = sys.stdout.isatty()
+    tty = sys.stdout.isatty() and not quiet
     pool = ThreadPoolExecutor(max_workers=workers)
     futs = [pool.submit(func, it) for it in items]
     try:
@@ -322,13 +323,14 @@ def run_pool(func, items, workers, label):
                     sys.stdout.write("\r  %s %d/%d  ok %d " % (label, done[0], len(items), good))
                     sys.stdout.flush()
     except KeyboardInterrupt:
-        print("\n  stopped: keeping the results so far")
+        print("\nstopped: keeping the results so far")
         for f in futs:
             f.cancel()
     finally:
         pool.shutdown(wait=False)
     if tty:
-        print()
+        sys.stdout.write("\r" + " " * 40 + "\r")
+        sys.stdout.flush()
     return results
 
 
@@ -353,6 +355,8 @@ def parse_args():
     p.add_argument("--speed-url", default=DEFAULT_SPEED_URL, help="file to download through each IP")
     p.add_argument("--links", type=int, default=3, help="with --link: how many rewritten links (default 3)")
     p.add_argument("-o", "--output", default="results.csv", help="CSV file (default results.csv, '' = none)")
+    p.add_argument("-q", "--quiet", action="store_true",
+                   help="print only the result: the links with --link, else the best IPs one per line")
     p.add_argument("--insecure", action="store_true", help="don't verify the TLS certificate (not recommended)")
     p.add_argument("--seed", type=int, help="random seed (repeat the same sample)")
     p.add_argument("--version", action="version", version="cloudflare-clean-ip-hunter " + VERSION)
@@ -377,10 +381,15 @@ def main():
         port = a.port
     if a.no_tls:
         tls = False
+    def say(*lines):
+        if not a.quiet:
+            print(*lines, sep="\n")
+
     if tls and port in HTTP_PORTS or not tls and port in TLS_PORTS:
-        print("warning: port %d is a %s port on Cloudflare" % (port, "plain-http" if port in HTTP_PORTS else "TLS"))
+        print("warning: %d is a %s port on Cloudflare" % (port, "plain-http" if port in HTTP_PORTS else "TLS"),
+              file=sys.stderr)
     elif port not in TLS_PORTS | HTTP_PORTS:
-        print("warning: Cloudflare does not proxy port %d, nothing will answer there" % port)
+        print("warning: Cloudflare doesn't proxy port %d" % port, file=sys.stderr)
     t = Target(sni, host, port, tls, a.insecure)
 
     if a.ip:
@@ -388,56 +397,50 @@ def main():
     else:
         nets, singles, skipped = load_ranges(a.ranges)
         if skipped:
-            print("note: %d IPv6 entries skipped (IPv4 only)" % skipped)
+            print("note: %d IPv6 entries skipped (IPv4 only)" % skipped, file=sys.stderr)
         cands = singles + pick_candidates(nets, a.count, rng)
     if not cands:
         raise SystemExit("nothing to test")
 
-    print("cloudflare-clean-ip-hunter %s" % VERSION)
-    print("testing %d IPs on port %d, %s, Host %s" % (len(cands), port, "TLS with SNI " + sni if tls else "plain http", host))
+    say("clean-ip-hunter %s: %d IPs, port %d, %s%s" % (VERSION, len(cands), port, "SNI " + sni if tls else "plain http",
+                                                         "" if host == sni else ", Host " + host))
     if not a.domain and not a.link:
-        print("tip: pass your own config's domain with -d (or --link): the filter can treat your SNI differently")
+        say("tip: use your own config's domain: -d your.domain")
 
-    first = run_pool(lambda ip: (ip, trace(ip, t, a.timeout)), cands, a.workers, "checked")
+    first = run_pool(lambda ip: (ip, trace(ip, t, a.timeout)), cands, a.workers, "checked", a.quiet)
     good = [(ip, r) for ip, r in first if r["ok"]]
     why = Counter(r["why"] for _, r in first if not r["ok"])
-    failed = ", ".join("%s %d" % kv for kv in why.most_common())
-    print("working: %d of %d" % (len(good), len(first)) + ("   failed: " + failed if why else ""))
-    if good:
-        loc = Counter(r["loc"] for _, r in good).most_common(1)[0][0]
-        warp = any(r["warp"] != "off" for _, r in good)
-        print("Cloudflare sees this connection in: %s" % loc)
-        if loc != "IR" or warp:
-            print("  if you are in Iran, a VPN or WARP is still on: turn it off and scan again,\n"
-                  "  otherwise these results say nothing about your own ISP")
-    else:
+    failed = " | " + ", ".join("%s %d" % kv for kv in why.most_common()) if why else ""
+    if not good:
+        print("working 0/%d%s" % (len(first), failed), file=sys.stderr if a.quiet else sys.stdout)
         if why.get("bad-cert"):
-            print("certificate errors: is %s really behind Cloudflare (orange cloud)? check the domain" % sni)
+            print("certificate errors: is %s really behind Cloudflare\n(orange cloud)? check the domain" % sni)
         if why.get("timeout") or why.get("reset"):
-            print("timeouts/resets on every IP: try -t 4, another network, or plain http ports with --no-tls -p 8080")
+            print("timeouts/resets on every IP: try -t 4, another network,\nor a plain-http port: --no-tls -p 8080")
         sys.exit(1)
+    loc = Counter(r["loc"] for _, r in good).most_common(1)[0][0]
+    say("working %d/%d, seen from %s%s" % (len(good), len(first), loc, failed))
+    if loc != "IR" or any(r["warp"] != "off" for _, r in good):
+        say("if you are in Iran, a VPN or WARP is still on: turn it",
+            "off and scan again, or this says nothing about your ISP")
 
     rows = run_pool(lambda g: (g[0], measure(g[0], g[1], t, a.timeout, a.rounds) or {"ok": False}),
-                    good, a.workers, "measured")
+                    good, a.workers, "measured", a.quiet)
     rows = [r for _, r in rows if r.get("ok", True)]
     rows.sort(key=lambda r: (r["loss"], r["ping"], r["jitter"]))
 
     if a.speed and rows:
         nb = int(a.speed_mb * 1e6)
-        print("download test on the best %d (%.0f MB each)..." % (min(a.speed_top, len(rows)), a.speed_mb))
-        for r in rows[:a.speed_top]:
-            r["speed"] = speed_test(r["ip"], a.speed_url, nb, a.timeout, a.insecure)
+        run_pool(lambda r: (r, r.update(speed=speed_test(r["ip"], a.speed_url, nb, a.timeout, a.insecure)) or {}),
+                 rows[:a.speed_top], 1, "speed test", a.quiet)
         if all(r["speed"] is None for r in rows[:a.speed_top]):
-            print("  download failed on all of them (the speed host may be blocked on your network: try --speed-url)")
+            say("download failed on all (speed host blocked? try --speed-url)")
         rows[:a.speed_top] = sorted(rows[:a.speed_top], key=lambda r: (r["loss"], -(r["speed"] or 0), r["ping"]))
 
-    print()
-    print("%-4s %-16s %8s %8s %6s %5s %s" % ("#", "IP", "PING", "JITTER", "LOSS", "COLO", "SPEED" if a.speed else ""))
+    say(("%-3s%-16s%6s%6s%6s  %-5s%s" % ("#", "IP", "PING", "JIT", "LOSS", "COLO", "SPEED" if a.speed else "")).rstrip())
     for i, r in enumerate(rows[:a.top], 1):
         sp = ("%.1f Mbps" % r["speed"]) if r["speed"] else ("-" if a.speed else "")
-        print("%-4d %-16s %5.0f ms %5.0f ms %5.0f%% %5s %s" % (i, r["ip"], r["ping"], r["jitter"], r["loss"], r["colo"], sp))
-    colos = Counter(r["colo"] for r in rows)
-    print("\ndatacenters: " + ", ".join("%s %d" % kv for kv in colos.most_common(8)))
+        say(("%-3d%-16s%4.0fms%4.0fms%5.0f%%  %-5s%s" % (i, r["ip"], r["ping"], r["jitter"], r["loss"], r["colo"], sp)).rstrip())
 
     if a.output:
         with open(a.output, "w", newline="", encoding="utf-8") as f:
@@ -446,16 +449,16 @@ def main():
             for i, r in enumerate(rows, 1):
                 w.writerow([i, r["ip"], port, round(r["ping"]), round(r["jitter"]), round(r["loss"]), r["colo"],
                             round(r["speed"], 1) if r["speed"] else ""])
-        print("all %d working IPs saved to %s" % (len(rows), a.output))
+        say("all %d working IPs -> %s" % (len(rows), a.output))
 
     if a.link and rows:
         links = [rewrite_link(a.link, r["ip"]) for r in rows[:a.links]]
-        print("\nyour %s link with the best IPs (address changed, SNI and Host kept as %s):" % (scheme, sni))
-        for ln in links:
-            print(ln)
         with open("links.txt", "w", encoding="utf-8") as f:
             f.write("\n".join(links) + "\n")
-        print("saved to links.txt")
+        say("your %s link with the best IPs -> links.txt" % scheme, "(address = the IP, SNI and Host stay %s)" % sni)
+        print("\n".join(links))
+    elif a.quiet:
+        print("\n".join(r["ip"] for r in rows[:a.top]))
 
 
 if __name__ == "__main__":

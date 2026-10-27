@@ -70,6 +70,7 @@ python3 scanner.py -d your.domain.com --speed            # تست دانلود �
 python3 scanner.py -d your.domain.com -n 500             # آی‌پی بیشتر
 python3 scanner.py -d your.domain.com -r my_ips.txt      # فقط آی‌پی‌ها یا رنج‌های خودت (مثلاً خروجی دفعه‌ی قبل)
 python3 scanner.py -d your.domain.com --no-tls -p 8080   # کانفیگ بدون TLS روی پورت‌های http
+python3 scanner.py --link 'vless://...' -q               # فقط لینک‌های آماده رو چاپ کن (برای کپی)
 ```
 
 - لینک رو توی لینوکس، مک و Termux بین `'` بذار؛ توی CMD ویندوز بین `"`.
@@ -85,7 +86,7 @@ python3 scanner.py -d your.domain.com --no-tls -p 8080   # کانفیگ بدون
 | COLO | کد دیتاسنتر کلودفلر که جواب داده |
 | SPEED | سرعت دانلود (فقط با `--speed`) |
 
-همه‌ی آی‌پی‌های سالم توی `results.csv` ذخیره میشن، و با `--link` لینک‌های آماده توی `links.txt`.
+همه‌ی آی‌پی‌های سالم توی `results.csv` ذخیره میشن، و با `--link` لینک‌های آماده توی `links.txt`. خروجی باریکه تا روی صفحه‌ی گوشی (Termux) هم نشکنه.
 
 | گزینه | پیش‌فرض | کار |
 |---|---|---|
@@ -105,6 +106,7 @@ python3 scanner.py -d your.domain.com --no-tls -p 8080   # کانفیگ بدون
 | `--speed-url` | `speed.cloudflare.com/__down` | فایلی که دانلود میشه (اگه این آدرس روی شبکه‌ات بسته‌ست، یه فایل روی دامنه‌ی خودت بده) |
 | `--links` | 3 | با `--link`: چند لینک ساخته بشه |
 | `-o`, `--output` | `results.csv` | فایل CSV (`''` یعنی ذخیره نکن) |
+| `-q`, `--quiet` | | فقط نتیجه: با `--link` لینک‌ها، وگرنه بهترین آی‌پی‌ها هر کدوم توی یه خط |
 
 ## گذاشتن آی‌پی توی کلاینت
 
@@ -149,6 +151,7 @@ One file, Python 3.8+ standard library only. Tested on Ubuntu 24.04 (Python 3.12
 curl -fsSLO https://github.com/v74all/cloudflare-clean-ip-hunter/releases/latest/download/scanner.py
 python3 scanner.py -d your.domain.com
 python3 scanner.py --link 'vless://...' --speed
+python3 scanner.py --link 'vless://...' -q        # only the ready links
 ```
 
 Windows: install Python from python.org, then `py scanner.py -d your.domain.com`. Android: Termux, `pkg install python`.

@@ -148,12 +148,22 @@ class EndToEnd(unittest.TestCase):
         r = self.run_scanner("--link", link, "--ip", "127.0.0.1", "--insecure", "--speed", "--speed-mb", "0.2",
                              "--speed-url", "https://localhost:%d/__down?bytes={bytes}" % self.port)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("working: 1 of 1", r.stdout)
+        self.assertIn("working 1/1, seen from IR", r.stdout)
         self.assertIn("TST", r.stdout)
         self.assertIn("Mbps", r.stdout)
         self.assertIn("vless://id@127.0.0.1:%d?" % self.port, r.stdout)
         with open(os.path.join(self.dir, "results.csv")) as f:
             self.assertEqual(f.read().splitlines()[1].split(",")[1:3], ["127.0.0.1", str(self.port)])
+        self.assertTrue(all(len(ln) <= 69 for ln in r.stdout.splitlines() if not ln.startswith("vless://")),
+                        r.stdout)                         # fits a phone / a 69-column terminal
+
+    def test_quiet_prints_only_the_result(self):
+        r = self.run_scanner("-d", "localhost", "-p", str(self.port), "--ip", "127.0.0.1", "--insecure", "-q", "-o", "")
+        self.assertEqual((r.returncode, r.stdout), (0, "127.0.0.1\n"))
+        link = "trojan://pw@localhost:%d?type=ws#t" % self.port
+        r = self.run_scanner("--link", link, "--ip", "127.0.0.1", "--insecure", "-q", "-o", "")
+        self.assertEqual(r.stdout.splitlines(), ["trojan://pw@127.0.0.1:%d?type=ws&sni=localhost&host=localhost#t-127.0.0.1"
+                                                 % self.port])
 
     def test_certificate_is_checked_by_default(self):
         r = self.run_scanner("-d", "localhost", "-p", str(self.port), "--ip", "127.0.0.1", "-o", "")
